@@ -33,6 +33,8 @@ It is two things at once:
   job/notification bus, **Redis** for fast job state, and **SQLite or PostgreSQL**
   for durable storage.
 
+![FinBuddy screenshot](Screenshot from 2026-07-03 18-12-52.png)
+
 ## Managing agents (the framework)
 
 Beyond the chat surface, FinBuddy is a control plane for agents in production:
