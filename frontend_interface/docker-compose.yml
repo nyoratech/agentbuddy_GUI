@@ -1,0 +1,120 @@
+# FinBuddy — minimal interface, full local stack.
+#
+#   docker compose up --build
+#
+# Brings up: postgres, redis, rabbitmq, the FastAPI backend and the Reflex
+# frontend. Open http://localhost:3000 and log in as demo / demo.
+#
+# To point the SAME images at cloud infrastructure instead, override the
+# connection env vars (CLOUDAMQP_URL, REDIS_URL, DATABASE_URL) in a .env file
+# and remove the services you no longer need.
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: fb_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: finbuddy_db
+      POSTGRES_USER: finbuddy_app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-finbuddy_dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - fb_postgres_data:/var/lib/postgresql/data
+      # RBAC schema (users/groups/resources/permissions) used by chat sharing.
+      - ./frontend/permission_db/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finbuddy_app -d finbuddy_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [fb_net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: fb_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [fb_net]
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: fb_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"      # AMQP
+      - "15672:15672"    # management UI (guest / guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [fb_net]
+
+  backend:
+    build: ./backend
+    container_name: fb_backend
+    restart: unless-stopped
+    environment:
+      RUNNING_IN_DOCKER: "true"
+      DB_HOST: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-finbuddy_dev_password}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-me}
+      # RabbitMQ / Redis auto-resolve to the service names in docker.
+      # For cloud, set CLOUDAMQP_URL / REDIS_URL / DATABASE_URL here instead.
+    ports:
+      - "8008:8008"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [fb_net]
+
+  frontend:
+    build: ./frontend
+    container_name: fb_frontend
+    restart: unless-stopped
+    environment:
+      RUNNING_IN_DOCKER: "true"
+      BACKEND_URL: http://backend:8008
+      # docker has the broker, so use async jobs + live RabbitMQ notifications.
+      USE_ASYNC_JOBS: "true"
+      # Must match the backend so backend accepts frontend-minted JWTs.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-change-me}
+      # Chat history / plots live in a SQLite file on a volume.
+      DATABASE_URL: sqlite:////data/finbuddy.db
+      # Postgres (RBAC) for chat sharing; frontend degrades gracefully if absent.
+      DB_HOST: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-finbuddy_dev_password}
+      # RabbitMQ auto-resolves to amqp://guest:guest@rabbitmq/ in docker.
+    ports:
+      - "3000:3000"   # web UI
+      - "8000:8000"   # reflex state backend (websocket)
+    volumes:
+      - fb_frontend_data:/data
+    depends_on:
+      - backend
+      - rabbitmq
+      - postgres
+    networks: [fb_net]
+
+volumes:
+  fb_postgres_data:
+  fb_frontend_data:
+
+networks:
+  fb_net:
+    driver: bridge

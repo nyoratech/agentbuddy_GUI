@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-backend/
+.venv-frontend/
+venv/
+
+# Env / secrets
+.env
+
+# Local databases
+*.db
+backend/finbuddy_local.db
+frontend/reflex.db
+
+# Reflex build artifacts
+frontend/.web/
+frontend/assets/external/
+frontend/.states/
+.states/
+# Auto-generated DB migration scaffold (created at build/run time from models)
+frontend/alembic/
+frontend/alembic.ini
+
+# Logs
+*.log
+
+# pytest
+.pytest_cache/
