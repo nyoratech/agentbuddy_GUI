@@ -33,7 +33,7 @@ It is two things at once:
   job/notification bus, **Redis** for fast job state, and **SQLite or PostgreSQL**
   for durable storage.
 
-![FinBuddy screenshot](Screenshot from 2026-07-03 18-12-52.png)
+![FinBuddy screenshot](Screenshot%20from%202026-07-03%2018-12-52.png)
 
 ## Managing agents (the framework)
 
